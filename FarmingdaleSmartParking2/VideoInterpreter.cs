@@ -194,6 +194,7 @@ namespace Carz
          */
         private void CarDidEnterDefault(DateTime timeCarLeft, VideoInterpreter sender)
         {
+            /*
             using (SqlConnection connection = new SqlConnection(SQLConnection.ConnString("ParkingLotDB")))
             {
                 try
@@ -213,11 +214,13 @@ namespace Carz
                     System.Console.Out.Write(e.ToString());
                 }
             }
+            */
         }
 
 
         private void CarDidLeaveDefault(DateTime timeCarLeft, VideoInterpreter sender)
         {
+            /*
             using (SqlConnection connection = new SqlConnection(SQLConnection.ConnString("ParkingLotDB")))
             {
 
@@ -238,6 +241,7 @@ namespace Carz
                     System.Console.Out.Write(e.ToString());
                 }
             }
+            */
         }
     }
 }
