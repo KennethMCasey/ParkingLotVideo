@@ -6,8 +6,12 @@ using System.Threading.Tasks;
 using System.Drawing;
 using Emgu;
 using System.Threading;
+using Dapper;
+using System.Data;
+using System.Data.SqlClient;
 
-namespace FarmingdaleSmartParking2
+
+namespace Carz
 {
     class VideoInterpreter
     {
@@ -34,7 +38,7 @@ namespace FarmingdaleSmartParking2
         {
             //sets variables that are not passed
             this.showWindow = false;
-            numCarsInLot = -1;
+            numCarsInLot = 0;
             fps = 30;
             frameWidth = 1920;
             frameHeight = 1080;
@@ -56,6 +60,9 @@ namespace FarmingdaleSmartParking2
         public async void start()
         {
 
+            if (this.CarDidEnter == null) CarDidEnter = CarDidEnterDefault;
+            if (this.CarDidLeave == null) CarDidLeave = CarDidLeaveDefault;
+
             //flag to note process started to prevent changing peramaters that would break the processing
             didStart = true;
 
@@ -75,7 +82,7 @@ namespace FarmingdaleSmartParking2
                     for (; ; )
                     {
                         vCapture.Read(iMatrix);
-                        System.Console.Out.WriteLine(iMatrix.Size.ToString());
+                        //System.Console.Out.WriteLine(iMatrix.Size.ToString());
                         Emgu.CV.CvInvoke.WaitKey((int)(1 / fps * 1000));
                     }
                 });
@@ -92,7 +99,7 @@ namespace FarmingdaleSmartParking2
                         Emgu.CV.CvInvoke.CvtColor(iMatrix, oMatrix, Emgu.CV.CvEnum.ColorConversion.Bgr2Gray);
 
                         //Uses the cascade xml file provided in the initalizer to draw rectangles arround possible canditates.
-                        Rectangle[] rects = casc.DetectMultiScale(oMatrix, 1.1, 1);
+                        Rectangle[] rects = casc.DetectMultiScale(oMatrix, 1.025, 37, new Size(250, 250), new Size(600, 600));
 
                         //removes the image from the out matrix if one exists to make room for the new one.
                         oMatrix.PopBack(1);
@@ -116,22 +123,18 @@ namespace FarmingdaleSmartParking2
                             //increase the number of cars in frame for each iteration
                             carsInFrame++;
                         }
+                        System.Console.Out.Write(numCarsInLot);
+
+
 
                         //if the number of cars has changed
-                        if (carsInFrame != numCarsInLot)
-                        {
+                        //call the proper delagte the necessary amount of times
+                        if (carsInFrame > numCarsInLot) for (int i = 0; i < carsInFrame - numCarsInLot; i++) Task.Run(() => CarDidEnter.Invoke(DateTime.Now, this));
+                        if (carsInFrame < numCarsInLot) for (int i = 0; i < numCarsInLot - carsInFrame; i++) Task.Run(() => CarDidLeave.Invoke(DateTime.Now, this));
 
-                            //get the time of the car value change
-                            DateTime now = DateTime.Now;
+                        //update the number of cars
+                        numCarsInLot = carsInFrame;
 
-                            //call the proper delagte the necessary amount of times
-                            if (carsInFrame > numCarsInLot) for (int i = 0; i < carsInFrame - numCarsInLot; i++) if (CarDidEnter != null) Task.Run(() => CarDidEnter.Invoke(now, this));
-                            if (carsInFrame < numCarsInLot) for (int i = 0; i < numCarsInLot - carsInFrame; i++) if (CarDidLeave != null) Task.Run(() => CarDidLeave.Invoke(now, this));
-
-                            //update the number of cars
-                            numCarsInLot = carsInFrame;
-
-                        }
 
                         //if the show window flag is true we push the drawn images to the window
                         if (showWindow) Emgu.CV.CvInvoke.Imshow("Car Detection Test", iMatrix);
@@ -189,5 +192,52 @@ namespace FarmingdaleSmartParking2
          } 
          
          */
+        private void CarDidEnterDefault(DateTime timeCarLeft, VideoInterpreter sender)
+        {
+            using (SqlConnection connection = new SqlConnection(SQLConnection.ConnString("ParkingLotDB")))
+            {
+                try
+                {
+                    using (SqlCommand command = new SqlCommand("spCarParked", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.Add(new SqlParameter("@ParkingLotID", sender.getParkingLotId()));
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                        connection.Close();
+                        System.Console.Out.Write("Success");
+                    }
+                }
+                catch (Exception e)
+                {
+                    System.Console.Out.Write(e.ToString());
+                }
+            }
+        }
+
+
+        private void CarDidLeaveDefault(DateTime timeCarLeft, VideoInterpreter sender)
+        {
+            using (SqlConnection connection = new SqlConnection(SQLConnection.ConnString("ParkingLotDB")))
+            {
+
+                try
+                {
+                    using (SqlCommand command = new SqlCommand("spCarLeft", connection))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.Add(new SqlParameter("@ParkingLotID", sender.getParkingLotId()));
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                        connection.Close();
+                        System.Console.Out.Write("Success");
+                    }
+                }
+                catch (Exception e)
+                {
+                    System.Console.Out.Write(e.ToString());
+                }
+            }
+        }
     }
 }
